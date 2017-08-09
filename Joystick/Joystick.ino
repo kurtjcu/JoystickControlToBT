@@ -1,7 +1,7 @@
 
 #include "./pt/pt.h"   // include protothread library
 
-#define BAUD_RATE 38600 //Baud rate for the Windows Driver
+#define BAUD_RATE 9600 //Baud rate for the Windows Driver
 
 #define POT_1 A0
 #define POT_2 A1
@@ -17,10 +17,9 @@ int pot1 = 0;
 int pot2 = 0;
 int thetaX = 0;
 int thetaY = 0;
-int thetaZ = 0;
 int newthetaX = 0;
 int newthetaY = 0;
-int newthetaZ = 0;
+
 //note that pot1 and motor1 is always x
 //and pot2 and motor2 is always y or z depending on state
 int newTorque1 = 0;
@@ -67,9 +66,9 @@ void setup() {
   
   PT_INIT(&pt1);  // initialise the two
   PT_INIT(&pt2);  // protothread variables
-  PT_INIT(&pt3);  // initialise the two
-  PT_INIT(&pt4);  // protothread variables
-  Serial.begin(BAUD_RATE, SERIAL_8E1);
+  //PT_INIT(&pt3);  // initialise the two
+  //PT_INIT(&pt4);  // protothread variables
+  Serial.begin(BAUD_RATE);
 }
 
 
@@ -85,20 +84,32 @@ static int protothreadAngle(struct pt *pt, int interval) {
     timestamp = millis(); // take a new timestamp
 
     switchState = digitalRead(TOGGLE_PIN);
-    newthetaX = analogRead(POT_1); //Top potentiometer
-    pot2 = analogRead(POT_2); //Top potentiometer
-    if(switchState == 0){
-      //move on x and y axis
-      newthetaY = pot2;
-      newthetaZ = 512; //pot zero
-    }else{
-      //move on x and z axis
-      newthetaY = 512; //pot zero
-      newthetaZ = pot2;
-    }
+    newthetaX = analogRead(POT_1); //X potentiometer
+    newthetaY = analogRead(POT_2); //Y potentiometer
   }
   PT_END(pt);
 }
+
+
+/* Send the Angle position over serial*/
+static int protothreadOutput(struct pt *pt, int interval) {
+  static unsigned long timestamp = 0;
+  PT_BEGIN(pt);
+  while(1) {
+    PT_WAIT_UNTIL(pt, millis() - timestamp > interval ); // What should the condition be?
+    timestamp = millis();
+    //Send the angle positions
+    char outputString[10];
+    thetaX = newthetaX;
+    thetaY = newthetaY;
+    sprintf(outputString, "%d-%d", thetaX, thetaY);
+    Serial.println(outputString);
+  }
+  PT_END(pt);
+}
+
+
+
 /* Generate the motor Torque*/
 static int protothreadMotor (struct pt *pt) {
   //static unsigned long timestamp = 0;
@@ -145,7 +156,7 @@ static int protothreadInput(struct pt *pt, int interval) {
   static unsigned long timestamp = 0;
   PT_BEGIN(pt);
   while(1) {
-    PT_WAIT_UNTIL(pt, (Serial.available() > 0) && (millis() - timestamp > interval) ); // What should the condition be?
+    PT_WAIT_UNTIL(pt, (Serial.available() > 0) && (millis() - timestamp > interval) ); 
     timestamp = millis();
     //Read from the serial input buffer
     inputString = Serial.readStringUntil('\n');
@@ -156,28 +167,10 @@ static int protothreadInput(struct pt *pt, int interval) {
   PT_END(pt);
 }
 
-/* Send the Angle position over serial*/
-static int protothreadOutput(struct pt *pt, int interval) {
-  static unsigned long timestamp = 0;
-  PT_BEGIN(pt);
-  while(1) {
-    PT_WAIT_UNTIL(pt, newthetaX != thetaX || newthetaY != thetaY || newthetaZ != thetaZ); // What should the condition be?
-    timestamp = millis();
-    //Send the angle positions
-    char outputString[10];
-    thetaX = newthetaX;
-    thetaY = newthetaY;
-    thetaZ = newthetaZ;
-    sprintf(outputString, "%d,%d,%d", thetaX, thetaY, thetaZ);
-    Serial.println(outputString);
-  }
-  PT_END(pt);
-}
+
 
 void loop() {
   //Starting protothreads, and setting time interval (subject to change)
-  protothreadAngle(&pt1, 1);     //Angle Proto-Thread
-  protothreadInput(&pt3, 1);     //Serial Input Proto-Thread
-  protothreadMotor(&pt2);         //Motor Proto-Thread
-  protothreadOutput(&pt4, 1);  //Serial Output Proto-Thread
+  protothreadAngle(&pt1, 10);     //Angle Proto-Thread
+  protothreadOutput(&pt2, 100);  //Serial Output Proto-Thread
 }
