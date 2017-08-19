@@ -11,7 +11,7 @@
 
 #include "./pt/pt.h"   // include protothread library
 
-#define BAUD_RATE 9600 //Baud rate for the Windows Driver
+#define BAUD_RATE 9600 //Baud rate for the 
 
 #define POT_1 A0
 #define POT_2 A1
